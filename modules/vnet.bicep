@@ -1,0 +1,47 @@
+@description('Create a new virtual network or use an existing one.')
+@allowed([
+  'new'
+  'existing'
+])
+param newOrExisting string = 'new'
+
+@description('Name of the virtual network to create.')
+param vNetName string
+
+@description('Location of the virtual network.')
+param location string
+
+@description('Virtual network address prefix.')
+param vNetAddressPrefix string
+
+@description('Virtual network address prefix.')
+param subnetName string
+
+@description('Subnet address prefix.')
+param subnetPrefix string
+
+resource vnet 'Microsoft.Network/virtualNetworks@2021-02-01' = if (newOrExisting == 'new') {
+  name: vNetName
+  location: location
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        vNetAddressPrefix
+      ]
+    }
+    subnets: [
+      {
+        name: subnetName
+        properties: {
+          addressPrefix: subnetPrefix
+        }
+      }
+    ]
+  }
+
+  resource subnet 'subnets' existing = {
+    name: subnetName
+  }
+}
+
+output subnetId string = vnet::subnet.id
