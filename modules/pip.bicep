@@ -1,12 +1,16 @@
-// 7_3-bicepPublicIp.bicep
-// Parameters
+// Name        : pip.bicep
+// Description : Creates a public IP address
+// Version     : 1.0.0
+// Author      : github.com/rchaganti
+
+// parameters
 param vmName string
 param location string
 
-// Variables
+// variables
 var pipName = '${vmName}pip'
 
-// Resources
+// resources
 resource pip 'Microsoft.Network/publicIPAddresses@2021-02-01' = {
   name: '${vmName}pip'
   location: location
@@ -23,10 +27,10 @@ resource pip 'Microsoft.Network/publicIPAddresses@2021-02-01' = {
   }
 }
 
-// Variables
+// variables
 var pipIP = reference(resourceId('Microsoft.Network/publicIPAddresses', pipName), '2021-02-01', 'full').properties
 
-// Outputs
+// outputs
 output pipInfo object = {
   id: pip.id
   dnsFqdn: pipIP.dnsSettings.fqdn

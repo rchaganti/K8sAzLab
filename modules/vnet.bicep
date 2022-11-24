@@ -1,3 +1,9 @@
+// Name        : vnet.bicep
+// Description : Creates a virtual network
+// Version     : 1.0.0
+// Author      : github.com/rchaganti
+
+// parameters
 @description('Create a new virtual network or use an existing one.')
 @allowed([
   'new'
@@ -20,6 +26,7 @@ param subnetName string
 @description('Subnet address prefix.')
 param subnetPrefix string
 
+// resources
 resource vnet 'Microsoft.Network/virtualNetworks@2021-02-01' = if (newOrExisting == 'new') {
   name: vNetName
   location: location
@@ -44,4 +51,5 @@ resource vnet 'Microsoft.Network/virtualNetworks@2021-02-01' = if (newOrExisting
   }
 }
 
+// outputs
 output subnetId string = vnet::subnet.id

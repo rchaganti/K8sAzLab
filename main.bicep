@@ -7,6 +7,15 @@
 @description('Location for all resources.')
 param location string = resourceGroup().location
 
+@description('Specifies the name of the Azure Storage account.')
+param storageAccountName string = 'k8sbicepstore'
+
+@description('Specifies the prefix of the blob container name.')
+param storageContainerName string = 'logs'
+
+@description('Specifies the prefix of the blob container name.')
+param storageFileShareName string = 'share'
+
 @description('Number of control plane VMs.')
 @allowed([
   1
@@ -29,6 +38,12 @@ param authenticationType string = 'password'
 @secure()
 param passwordOrKey string
 
+@description('CNI plugin to install.')
+param cniPlugin string = 'calico'
+
+@description('CNI Pod Network CIDR.')
+param cniCidr string = '10.244.0.0/16'
+
 // variables
 var cpVmNames = [for i in range(0, numCP): {
   name: 'cplane${(i + 1)}'
@@ -42,9 +57,20 @@ var workerVmNames = [for i in range(0, numWorker): {
 var vmObject = concat(cpVmNames, workerVmNames)
 
 // Script content for Kubernetes cluster creation
-var commonPrerequisiteConfig = loadFileAsBase64('scripts/common-prerequisites.sh')
-//var cpPrerequisiteConfig = loadFileAsBase64('scripts/cp-prerequisites.sh')
-//var workerPrerequisiteConfig = loadFileAsBase64('scripts/worker-prerequisites.sh')
+var commonPrerequisiteConfig = loadTextContent('scripts/common-prerequisites.sh', 'utf-8')
+var kubeadmInit = loadTextContent('scripts/kubeadmInit.sh','utf-8')
+var cniInstall = loadTextContent('scripts/cniPlugin.sh','utf-8')
+
+// Provision storage account, container, and file share
+module storageAccount 'modules/storage.bicep' = {
+  name: 'sa'
+  params: {
+    location: location
+    storageAccountName: storageAccountName
+    storageContainerName: storageContainerName
+    storageFileShareName: storageFileShareName
+  }
+}
 
 // Provision NSG and allow 22 and 6443
 module nsg 'modules/nsg.bicep' = {
@@ -122,10 +148,10 @@ module vms 'modules/linuxvm.bicep' = [for (vm, i) in vmObject: {
   }
 }]
 
-// Provision common config
-resource cse 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [for vm in vmObject: {
+// Provision common config using custom script extension
+resource cse 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [for (vm, i) in vmObject: {
+  name: '${vm.name}/commonfcse'
   dependsOn: vms
-  name: '${vm.name}/commoncse'
   location: location
   properties: {
     publisher: 'Microsoft.Azure.Extensions'
@@ -133,52 +159,68 @@ resource cse 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [for vm
     typeHandlerVersion: '2.1'
     autoUpgradeMinorVersion: true
     settings: {
-      script: commonPrerequisiteConfig
+      script: base64(commonPrerequisiteConfig)
     }
   }
 }]
 
-/*
-// Provision initial common config required for kubeadm init/join on all VMs
-module commonPrereq 'modules/linuxScript.bicep' = [for (vm, i) in vmObject: {
-  name: '${vm.name}copr'
-  dependsOn: vms
-  params: {
-    configType: 'common'
-    location: location
-    scriptContent: commonPrerequisiteConfig
-    vmName: vm.name
-  }
-}]
+// Perform kubeadm init on cplane1
+var blobUri = storageAccount.outputs.storage.blobUri
+var blobSuffix = storageAccount.outputs.storage.blobSuffix
 
-
-// Provision initial common config required for kubeadm init/join on all VMs
-module cpPrereq 'modules/linuxScript.bicep' = [for (vm, i) in vmObject: if(vm.role == 'cp') {
-  name: '${vm.name}cppr'
-  dependsOn: commonPrereq
+module kubeadm 'modules/managedRunCmd.bicep' = {
+  name: 'kubeadminit'
+  dependsOn: cse
   params: {
-    configType: 'cpPrereq'
+    configType: 'kubeadminit'
     location: location
-    scriptContent: cpPrerequisiteConfig
-    vmName: vm.name
+    vmName: 'cplane1'
+    scriptContent: kubeadmInit
+    scriptParams: [
+      {
+        value: cniCidr
+      }
+    ]
+    errorBlobUri: '${blobUri}/cplane1-kubeadminit-${blobSuffix}-err.txt' 
+    outputBlobUri: '${blobUri}/cplane1-kubeadminit-${blobSuffix}-out.txt' 
   }
-}]
+}
 
-// Provision initial common config required for kubeadm init/join on all VMs
-module workerPrereq 'modules/linuxScript.bicep' = [for (vm, i) in vmObject: if(vm.role == 'worker') {
-  name: '${vm.name}wpr'
-  dependsOn: commonPrereq
+// Install CNI plugin
+module cniInstallMrc 'modules/managedRunCmd.bicep' = {
+  name: '${kubeadm.name}Cni'
   params: {
-    configType: 'workerPrereq'
+    configType: 'cniInstall'
     location: location
-    scriptContent: workerPrerequisiteConfig
-    vmName: vm.name
+    vmName: 'cplane1'
+    scriptContent: cniInstall
+    scriptParams: [
+      {
+        value: username
+      }
+      {
+        value: cniPlugin
+      }
+      {
+        value: cniCidr
+      }
+    ]
+    errorBlobUri: '${blobUri}/cplane1-cniInstall-${blobSuffix}-err.txt' 
+    outputBlobUri: '${blobUri}/cplane1-cniInstall-${blobSuffix}-out.txt' 
   }
-}]
-*/
+}
+
+// TODO: Join the worker nodes
 
 // Retrieve output
-output deployment array = [for (vm, i) in vmObject: {
-  vmName: vm.name
-  vmConnect: 'ssh ${username}@${pip[i].outputs.pipInfo.dnsFqdn}'
+output vmInfo array = [for (vm, i) in vmObject: {
+  name: vm.name
+  connect: 'ssh ${username}@${pip[i].outputs.pipInfo.dnsFqdn}'
 }]
+
+output storageInfo object = {
+  saName: storageAccount.outputs.storage.name
+  saKey: storageAccount.outputs.storage.storageKey
+  shareUnc: storageAccount.outputs.storage.shareUri
+  blobUri: storageAccount.outputs.storage.blobUri
+}

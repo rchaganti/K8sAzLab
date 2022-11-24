@@ -1,3 +1,9 @@
+// Name        : linuxvm.bicep
+// Description : Creates a Linux virtual machine
+// Version     : 1.0.0
+// Author      : github.com/rchaganti
+
+// parameters
 @description('Name of the VM to be created.')
 param vmName string
 
@@ -36,6 +42,7 @@ param authenticationType string = 'password'
 @secure()
 param passwordOrKey string
 
+// variables
 var linuxConfiguration = {
   disablePasswordAuthentication: true
   ssh: {
@@ -48,6 +55,7 @@ var linuxConfiguration = {
   }
 }
 
+// resources
 resource vm 'Microsoft.Compute/virtualMachines@2021-11-01' = {
   name: vmName
   location: location
@@ -85,6 +93,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2021-11-01' = {
   }
 }
 
+// outputs
 output vmInfo object = {
   id: vm.id
   name: vm.name
