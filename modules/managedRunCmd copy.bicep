@@ -16,6 +16,12 @@ param location string
 @description('Should this script be executed asynchronously. Default is false.')
 param asyncExec bool = false
 
+@description('Storage blob Uri for storing errors from the script execution.')
+param errorBlobUri string
+
+@description('Storage blob Uri for storing errors from the script execution.')
+param outputBlobUri string
+
 @description('Script content to be executed.')
 param scriptContent string
 
@@ -39,6 +45,8 @@ resource mrc 'Microsoft.Compute/virtualMachines/runCommands@2022-08-01' = {
   location: location
   properties: {
     asyncExecution: asyncExec
+    errorBlobUri: errorBlobUri
+    outputBlobUri: outputBlobUri
     parameters: scriptParams
     protectedParameters: protecttedScriptParams
     source: scriptSource

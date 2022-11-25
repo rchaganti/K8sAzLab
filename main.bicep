@@ -11,9 +11,6 @@ param location string = resourceGroup().location
 param storageAccountName string = 'k8sbicepstore'
 
 @description('Specifies the prefix of the blob container name.')
-param storageContainerName string = 'logs'
-
-@description('Specifies the prefix of the blob container name.')
 param storageFileShareName string = 'share'
 
 @description('Number of control plane VMs.')
@@ -26,7 +23,7 @@ param numCP int = 1
 
 @description('Number of worker VMs.')
 @minValue(1)
-param numWorker int = 1
+param numWorker int = 3
 
 @description('Username for the Linux VM')
 param username string = 'ubuntu'
@@ -60,17 +57,6 @@ var vmObject = concat(cpVmNames, workerVmNames)
 var commonPrerequisiteConfig = loadTextContent('scripts/common-prerequisites.sh', 'utf-8')
 var kubeadmInit = loadTextContent('scripts/kubeadmInit.sh','utf-8')
 var cniInstall = loadTextContent('scripts/cniPlugin.sh','utf-8')
-
-// Provision storage account, container, and file share
-module storageAccount 'modules/storage.bicep' = {
-  name: 'sa'
-  params: {
-    location: location
-    storageAccountName: storageAccountName
-    storageContainerName: storageContainerName
-    storageFileShareName: storageFileShareName
-  }
-}
 
 // Provision NSG and allow 22 and 6443
 module nsg 'modules/nsg.bicep' = {
@@ -165,9 +151,6 @@ resource cse 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [for (v
 }]
 
 // Perform kubeadm init on cplane1
-var blobUri = storageAccount.outputs.storage.blobUri
-var blobSuffix = storageAccount.outputs.storage.blobSuffix
-
 module kubeadm 'modules/managedRunCmd.bicep' = {
   name: 'kubeadminit'
   dependsOn: cse
@@ -181,14 +164,28 @@ module kubeadm 'modules/managedRunCmd.bicep' = {
         value: cniCidr
       }
     ]
-    errorBlobUri: '${blobUri}/cplane1-kubeadminit-${blobSuffix}-err.txt' 
-    outputBlobUri: '${blobUri}/cplane1-kubeadminit-${blobSuffix}-out.txt' 
+  }
+}
+
+// Provision storage account, container, and file share
+module storageAccount 'modules/storage.bicep' = {
+  name: 'sa'
+  dependsOn: [
+    kubeadm
+  ]
+  params: {
+    location: location
+    storageAccountName: storageAccountName
+    storageFileShareName: storageFileShareName
   }
 }
 
 // Install CNI plugin
 module cniInstallMrc 'modules/managedRunCmd.bicep' = {
-  name: '${kubeadm.name}Cni'
+  name: 'CniInstallMrc'
+  dependsOn: [
+    storageAccount
+  ]
   params: {
     configType: 'cniInstall'
     location: location
@@ -205,8 +202,6 @@ module cniInstallMrc 'modules/managedRunCmd.bicep' = {
         value: cniCidr
       }
     ]
-    errorBlobUri: '${blobUri}/cplane1-cniInstall-${blobSuffix}-err.txt' 
-    outputBlobUri: '${blobUri}/cplane1-cniInstall-${blobSuffix}-out.txt' 
   }
 }
 
@@ -222,5 +217,4 @@ output storageInfo object = {
   saName: storageAccount.outputs.storage.name
   saKey: storageAccount.outputs.storage.storageKey
   shareUnc: storageAccount.outputs.storage.shareUri
-  blobUri: storageAccount.outputs.storage.blobUri
 }

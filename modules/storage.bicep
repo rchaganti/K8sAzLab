@@ -7,9 +7,6 @@
 @description('Name for the storage account. This has to be globally unique.')
 param storageAccountName string
 
-@description('Name for the storage container.')
-param storageContainerName string
-
 @description('Name for the file share.')
 param storageFileShareName string
 
@@ -29,27 +26,13 @@ resource sa 'Microsoft.Storage/storageAccounts@2021-04-01' = {
   }
 }
 
-resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@2021-04-01' = {
-  name: '${sa.name}/default/${storageContainerName}'
-  properties: {
-    publicAccess: 'Container'
-  }
-}
-
 resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2021-04-01' = {
   name: '${sa.name}/default/${storageFileShareName}'
 }
 
-// variables
-var blobUri = 'https://${storageAccountName}.blob.${environment().suffixes.storage}/${storageContainerName}'
-var shareUnc = '\\${storageAccountName}.file.${environment().suffixes.storage}\${storageFileShareName}'
-var blobSuffix = substring(guid(storageContainerName, storageFileShareName),0,5)
-
 // outputs
 output storage object = {
   name: sa.name
-  blobUri: blobUri
-  shareUri: shareUnc
-  blobSuffix: blobSuffix
+  shareUri: '//${storageAccountName}.file.${environment().suffixes.storage}/${storageFileShareName}'
   storageKey: sa.listKeys().keys[0].value
 }
