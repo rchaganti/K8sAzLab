@@ -57,6 +57,7 @@ var vmObject = concat(cpVmNames, workerVmNames)
 var commonPrerequisiteConfig = loadTextContent('scripts/common-prerequisites.sh', 'utf-8')
 var kubeadmInit = loadTextContent('scripts/kubeadmInit.sh','utf-8')
 var cniInstall = loadTextContent('scripts/cniPlugin.sh','utf-8')
+var finalizeDeploy = loadTextContent('scripts/finalizeDeploy.sh','utf-8')
 
 // Provision NSG and allow 22 and 6443
 module nsg 'modules/nsg.bicep' = {
@@ -151,8 +152,8 @@ resource cse 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [for (v
 }]
 
 // Perform kubeadm init on cplane1
-module kubeadm 'modules/managedRunCmd.bicep' = {
-  name: 'kubeadminit'
+module kubeadmInitMrc 'modules/managedRunCmd.bicep' = {
+  name: 'kubeadmInitMrc'
   dependsOn: cse
   params: {
     configType: 'kubeadminit'
@@ -171,7 +172,7 @@ module kubeadm 'modules/managedRunCmd.bicep' = {
 module storageAccount 'modules/storage.bicep' = {
   name: 'sa'
   dependsOn: [
-    kubeadm
+    kubeadmInitMrc
   ]
   params: {
     location: location
@@ -205,7 +206,34 @@ module cniInstallMrc 'modules/managedRunCmd.bicep' = {
   }
 }
 
-// TODO: Join the worker nodes
+// Join nodes to the Kubernetes cluster
+module finalizeDeployMrc 'modules/managedRunCmd.bicep' = [for vm in vmObject: {
+  name: '${vm.name}-finalizeDeploy'
+  dependsOn: [
+    cniInstallMrc
+  ]
+  params: {
+    configType: 'finalizeDeploy'
+    location: location
+    vmName: vm.name
+    scriptContent: finalizeDeploy
+    scriptParams: [
+      {
+        value: storageAccount.name
+      }
+      {
+        value: storageAccount.outputs.storage.storageKey
+      }
+      {
+        value: storageAccount.outputs.storage.shareUri
+      }
+      
+      {
+        value: vm.role
+      }
+    ]
+  }
+}]
 
 // Retrieve output
 output vmInfo array = [for (vm, i) in vmObject: {
