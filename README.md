@@ -1,4 +1,6 @@
-As a part of this experiment to automate Kubernetes deployment on Azure, I created a set of Bicep modules and a Bicep template that uses these modules. This is available in my GitHub repo [github.com/rchaganti/k8sazlab](https://github.com/rchaganti/k8sazlab). 
+# Kubernetes lab on Azure
+
+As a part of this experiment to automate Kubernetes deployment on Azure, I created a set of Bicep modules and a Bicep template that uses these modules.
 
 Here is how you use this template. First, start by cloning this repository.
 
