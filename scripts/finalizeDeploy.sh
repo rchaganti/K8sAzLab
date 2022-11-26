@@ -1,24 +1,25 @@
 #!/bin/sh
-SAACCOUNTNAME=$1
+NAME=$1
 SAKEY=$2
 SHARENAME=$3
 ROLE=$4
 
-# Mount Azure fileshare
 mkdir /mnt/share
 if [ ! -d "/etc/smbcredentials" ]; then
     mkdir /etc/smbcredentials
 fi
 if [ ! -f /etc/smbcredentials/smb.cred ]; then
-    bash -c "echo username=${SAACCOUNTNAME} >> /etc/smbcredentials/smb.cred"
+    bash -c "echo username=${NAME} >> /etc/smbcredentials/smb.cred"
     bash -c "echo password=${SAKEY} >> /etc/smbcredentials/smb.cred"
 fi
 chmod 600 /etc/smbcredentials/smb.cred
-sudo mount -t cifs $SHARENAME /mnt/share -o vers=3.0,credentials=/etc/smbcredentials/smb.cred,dir_mode=0777,file_mode=0777,serverino,nosharesock,actimeo=30
+mount -t cifs $SHARENAME /mnt/share -o credentials=/etc/smbcredentials/smb.cred,dir_mode=0777,file_mode=0777,serverino -v
 
 # Perform final actions based on the role of the VM
 case "$ROLE" in
         "cp")
+            echo "Generating a new kubeadm join command"
+            
             # Generate a new token
             TOKEN=$(kubeadm token generate)
 
@@ -26,6 +27,8 @@ case "$ROLE" in
             kubeadm token create $TOKEN --print-join-command > /mnt/share/joinCommand.txt
             ;;
         "worker")
+            echo "Retrieving kubeadm join command"
+            
             # Get kubeadm join command
             COMMAND=$(cat /mnt/share/joinCommand.txt)
 

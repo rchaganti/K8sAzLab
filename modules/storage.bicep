@@ -32,7 +32,7 @@ resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2021-0
 
 // outputs
 output storage object = {
-  name: sa.name
+  name: storageAccountName
   shareUri: '//${storageAccountName}.file.${environment().suffixes.storage}/${storageFileShareName}'
   storageKey: sa.listKeys().keys[0].value
 }

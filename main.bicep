@@ -1,6 +1,6 @@
 // Name        : main.bicep
 // Description : Implements template needed to provision a Kubernetes cluster using Ubuntu VMs on Azure
-// Version     : 1.0.0
+// Version     : 0.1.0
 // Author      : github.com/rchaganti
 
 // parameters
@@ -8,10 +8,10 @@
 param location string = resourceGroup().location
 
 @description('Specifies the name of the Azure Storage account.')
-param storageAccountName string = 'k8sbicepstore'
+param storageAccountName string
 
-@description('Specifies the prefix of the blob container name.')
-param storageFileShareName string = 'share'
+@description('Specifies the SMB share name for sharing files between nodes.')
+param storageFileShareName string = 'temp'
 
 @description('Number of control plane VMs.')
 @allowed([
@@ -206,20 +206,20 @@ module cniInstallMrc 'modules/managedRunCmd.bicep' = {
   }
 }
 
-// Join nodes to the Kubernetes cluster
-module finalizeDeployMrc 'modules/managedRunCmd.bicep' = [for vm in vmObject: {
-  name: '${vm.name}-finalizeDeploy'
+// Generate kubedam join command on control plane
+module finalizeDeployCPMrc 'modules/managedRunCmd.bicep' = {
+  name: 'finalizeDeployCP'
   dependsOn: [
     cniInstallMrc
   ]
   params: {
-    configType: 'finalizeDeploy'
+    configType: 'finalizeDeployCP'
     location: location
-    vmName: vm.name
+    vmName: 'cplane1'
     scriptContent: finalizeDeploy
     scriptParams: [
       {
-        value: storageAccount.name
+        value: storageAccountName
       }
       {
         value: storageAccount.outputs.storage.storageKey
@@ -227,9 +227,36 @@ module finalizeDeployMrc 'modules/managedRunCmd.bicep' = [for vm in vmObject: {
       {
         value: storageAccount.outputs.storage.shareUri
       }
-      
       {
-        value: vm.role
+        value: 'cp'
+      }
+    ]
+  }
+}
+
+// Join nodes to the Kubernetes cluster
+module finalizeDeployWorkerMrc 'modules/managedRunCmd.bicep' = [for vm in vmObject: if (vm.role == 'worker') {
+  name: '${vm.name}-finalizeDeployWorker'
+  dependsOn: [
+    finalizeDeployCPMrc
+  ]
+  params: {
+    configType: 'finalizeDeployWorker'
+    location: location
+    vmName: vm.name
+    scriptContent: finalizeDeploy
+    scriptParams: [
+      {
+        value: storageAccountName
+      }
+      {
+        value: storageAccount.outputs.storage.storageKey
+      }
+      {
+        value: storageAccount.outputs.storage.shareUri
+      }
+      {
+        value: 'worker'
       }
     ]
   }
@@ -240,9 +267,3 @@ output vmInfo array = [for (vm, i) in vmObject: {
   name: vm.name
   connect: 'ssh ${username}@${pip[i].outputs.pipInfo.dnsFqdn}'
 }]
-
-output storageInfo object = {
-  saName: storageAccount.outputs.storage.name
-  saKey: storageAccount.outputs.storage.storageKey
-  shareUnc: storageAccount.outputs.storage.shareUri
-}
