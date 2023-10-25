@@ -29,32 +29,37 @@ EOF
 sysctl --system
 
 # Install Containerd
-curl -Lo /tmp/containerd-1.6.9-linux-amd64.tar.gz https://github.com/containerd/containerd/releases/download/v1.6.9/containerd-1.6.9-linux-amd64.tar.gz
-tar Cxzvf /usr/local /tmp/containerd-1.6.9-linux-amd64.tar.gz
+CONTAINERD_VERSION="1.7.4"
+RUNC_VERSION="1.1.9"
+CNI_PLUGINS_VERSION="1.3.0"
 
-curl -Lo /tmp/runc.amd64 https://github.com/opencontainers/runc/releases/download/v1.1.4/runc.amd64
+# Install containerd
+curl -Lo /tmp/containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz \
+         https://github.com/containerd/containerd/releases/download/v${CONTAINERD_VERSION}/containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz
+tar Cxzvf /usr/local /tmp/containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz
+
+# Install runc
+curl -Lo /tmp/runc.amd64 https://github.com/opencontainers/runc/releases/download/v${RUNC_VERSION}/runc.amd64
 install -m 755 /tmp/runc.amd64 /usr/local/sbin/runc
 
-curl -Lo /tmp/cni-plugins-linux-amd64-v1.1.1.tgz https://github.com/containernetworking/plugins/releases/download/v1.1.1/cni-plugins-linux-amd64-v1.1.1.tgz
-mkdir -p /opt/cni/bin
-tar Cxzvf /opt/cni/bin /tmp/cni-plugins-linux-amd64-v1.1.1.tgz
+# clean up containerd and runc files
+rm -rf /tmp/containerd-${CONTAINERD_VERSION}-linux-amd64.tar.gz /tmp/runc.amd64
 
-# Remove the temporary files
-rm /tmp/containerd-1.6.9-linux-amd64.tar.gz /tmp/runc.amd64 /tmp/cni-plugins-linux-amd64-v1.1.1.tgz
-
-mkdir /etc/containerd
-containerd config default | sudo tee /etc/containerd/config.toml
-sed -i 's/SystemdCgroup \= false/SystemdCgroup \= true/g' /etc/containerd/config.toml
-
-curl -Lo /etc/systemd/system/containerd.service https://raw.githubusercontent.com/containerd/containerd/main/containerd.service
+# install containerd config
+mkdir -p /etc/containerd
+containerd config default | tee /etc/containerd/config.toml
+sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+curl -Lo /etc/systemd/system/containerd.service https://raw.githubusercontent.com/containerd/cri/master/contrib/systemd-units/containerd.service  
 systemctl daemon-reload
 systemctl enable --now containerd
+systemctl status containerd --no-pager
 
 # Kubeadm, Kubelet, and Kubectl
-curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
-echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
-apt-get update
-apt-get install -y kubelet kubeadm kubectl
+curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://dl.k8s.io/apt/doc/apt-key.gpg
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | tee /etc/apt/sources.list.d/kubernetes.list
+
+apt update
+apt install -y kubelet kubeadm kubectl
 apt-mark hold kubelet kubeadm kubectl
 
 # Install Helm 3 for CNI install later
