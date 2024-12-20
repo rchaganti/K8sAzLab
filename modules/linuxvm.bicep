@@ -1,8 +1,3 @@
-// Name        : linuxvm.bicep
-// Description : Creates a Linux virtual machine
-// Version     : 1.0.0
-// Author      : github.com/rchaganti
-
 // parameters
 @description('Name of the VM to be created.')
 param vmName string

@@ -1,7 +1,4 @@
-// Name        : vnet.bicep
-// Description : Creates a virtual network
-// Version     : 1.0.0
-// Author      : github.com/rchaganti
+import {virtualNetwork as vnet} from '../types/vnet.types.bicep'
 
 // parameters
 @description('Create a new virtual network or use an existing one.')
@@ -12,7 +9,7 @@
 param newOrExisting string = 'new'
 
 @description('Name of the virtual network to create.')
-param vNetName string
+param vNetName vnet.name
 
 @description('Location of the virtual network.')
 param location string
@@ -27,7 +24,7 @@ param subnetName string
 param subnetPrefix string
 
 // resources
-resource vnet 'Microsoft.Network/virtualNetworks@2021-02-01' = if (newOrExisting == 'new') {
+resource vnetwork 'Microsoft.Network/virtualNetworks@2021-02-01' = if (newOrExisting == 'new') {
   name: vNetName
   location: location
   properties: {

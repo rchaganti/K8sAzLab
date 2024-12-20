@@ -34,4 +34,5 @@ var pipIP = reference(resourceId('Microsoft.Network/publicIPAddresses', pipName)
 output pipInfo object = {
   id: pip.id
   dnsFqdn: pipIP.dnsSettings.fqdn
+  name: pip.name
 }

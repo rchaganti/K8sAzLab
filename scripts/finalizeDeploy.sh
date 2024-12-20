@@ -3,6 +3,7 @@ NAME=$1
 SAKEY=$2
 SHARENAME=$3
 ROLE=$4
+KUBEADM_JOIN_YML=$5
 
 mkdir /mnt/share
 if [ ! -d "/etc/smbcredentials" ]; then

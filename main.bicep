@@ -1,63 +1,36 @@
-// Name        : main.bicep
-// Description : Implements template needed to provision a Kubernetes cluster using Ubuntu VMs on Azure
-// Version     : 0.1.0
-// Author      : github.com/rchaganti
+import {k8scluster as k8s} from 'types/K8sCluster.types.bicep'
+import {linuxVm as vm} from 'types/linuxvm.types.bicep'
 
 // parameters
 @description('Location for all resources.')
 param location string = resourceGroup().location
 
-@description('Specifies the name of the Azure Storage account.')
-param storageAccountName string
+@description('Kubernetes cluster object.')
+param k8sInfo k8s = {
+  name: ''
+  numCP: 1
+  numWorker: 2
+  cniCidr: '10.244.0.0/16'
+  cniPlugin: 'calico'
+}
 
-@description('Specifies the SMB share name for sharing files between nodes.')
-param storageFileShareName string = 'temp'
+@description('Linux VM parameters')
+param linuxInfo vm = {
+  username: 'azureuser'
+  passwordOrKey: 'Password'
+}
 
-@description('Number of control plane VMs.')
-@allowed([
-  1
-  3
-  5
-])
-param numCP int = 1
-
-@description('Number of worker VMs.')
-@minValue(1)
-param numWorker int = 3
-
-@description('Username for the Linux VM')
-param username string = 'ubuntu'
-
-@description('Type of authentication to use on the Virtual Machine. SSH key is recommended.')
-param authenticationType string = 'password'
-
-@description('SSH Key or password for the Virtual Machine. SSH key is recommended.')
-@secure()
-param passwordOrKey string
-
-@description('CNI plugin to install.')
-param cniPlugin string = 'calico'
-
-@description('CNI Pod Network CIDR.')
-param cniCidr string = '10.244.0.0/16'
-
-// variables
-var cpVmNames = [for i in range(0, numCP): {
+var cpVmNames = [for i in range(0, k8sInfo.numCP): {
   name: 'cplane${(i + 1)}'
   role: 'cp'
 }]
 
-var workerVmNames = [for i in range(0, numWorker): {
+var workerVmNames = [for i in range(0, k8sInfo.numWorker): {
   name: 'worker${(i + 1)}'
   role: 'worker'
 }]
 var vmObject = concat(cpVmNames, workerVmNames)
 
-// Script content for Kubernetes cluster creation
-var commonPrerequisiteConfig = loadTextContent('scripts/common-prerequisites.sh', 'utf-8')
-var kubeadmInit = loadTextContent('scripts/kubeadmInit.sh','utf-8')
-var cniInstall = loadTextContent('scripts/cniPlugin.sh','utf-8')
-var finalizeDeploy = loadTextContent('scripts/finalizeDeploy.sh','utf-8')
 
 // Provision NSG and allow 22 and 6443
 module nsg 'modules/nsg.bicep' = {
@@ -164,6 +137,12 @@ module kubeadmInitMrc 'modules/managedRunCmd.bicep' = {
       {
         value: cniCidr
       }
+      {
+        value: pip[0].outputs.pipInfo.dnsFqdn
+      }
+      {
+        value: kubeadmInitYml
+      }
     ]
   }
 }
@@ -229,6 +208,9 @@ module finalizeDeployCPMrc 'modules/managedRunCmd.bicep' = {
       }
       {
         value: 'cp'
+      }
+      {
+        value: kubeadmJoinYml
       }
     ]
   }

@@ -1,17 +1,9 @@
-// Name        : storage.bicep
-// Description : Creates storage account, container, and fileshare
-// Version     : 1.0.0
-// Author      : github.com/rchaganti
+import {storageAccount as stg} from '../types/storage.types.bicep'
 
 // parameters
-@description('Name for the storage account. This has to be globally unique.')
-param storageAccountName string
-
-@description('Name for the file share.')
-param storageFileShareName string
-
-@description('Location where this storage account needs to be created.')
-param location string
+param storageAccountName stg.name
+param location stg.location
+param storageFileShareName stg.shareName
 
 // resources
 resource sa 'Microsoft.Storage/storageAccounts@2021-04-01' = {

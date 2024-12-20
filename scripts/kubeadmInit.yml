@@ -1,0 +1,22 @@
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+bootstrapTokens:
+- token: "${TOKEN}"
+  description: "kubeadm token"
+  ttl: "0"
+localAPIEndpoint:
+  advertiseAddress: ${API_ADDVERTISE_IP}
+  bindPort: 6443
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: v1.28
+clusterName: ${CLUSTER_NAME}
+controlPlaneEndpoint: ${API_ENDPOINT_INTERNAL}:6443
+certificatesDir: ${CERTS_DIR}
+networking:
+  podSubnet: ${POD_NET}
+apiServer:
+  certSANs:
+  - ${API_ENDPOINT_INTERNAL}
+  - ${API_ENDPOINT_EXTERNAL}
